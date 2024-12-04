@@ -74,10 +74,10 @@ with st.sidebar:
     # Preloaded Documents
     st.write("**Preloaded Documents**")
     if st.button("Load Sample PDF"):
-        documents = load_document(url="https://example.com/sample.pdf")  # Replace with a real URL
+        documents = load_document(url="https://archive.org/details/obrascompletased00gn/mode/2up?ref=ol&view=theater")  # Replace with a real URL
         st.session_state['document_list'].append("Sample PDF")
     if st.button("Load Sample Website"):
-        documents = load_document(url="https://example.com")  # Replace with a real URL
+        documents = load_document(url="https://drlee.io/how-to-use-openais-gpt-4-api-for-sentiment-classification-ba7deed49428")  # Replace with a real URL
         st.session_state['document_list'].append("Sample Website")
 
     # Query History
