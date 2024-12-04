@@ -5,3 +5,4 @@ chromadb
 tiktoken
 langchain_community
 pysqlite3-binary
+pypdf
