@@ -15,9 +15,13 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 # Page configuration (must be the first Streamlit command)
 st.set_page_config(page_title='🦜🔗 Enhanced Ask the Doc App')
 
-# Initialize persistent storage for document names
+# Initialize persistent storage for document names, query history, and API key
 if 'document_list' not in st.session_state:
     st.session_state['document_list'] = []
+if 'query_history' not in st.session_state:
+    st.session_state['query_history'] = []
+if 'api_key' not in st.session_state:
+    st.session_state['api_key'] = ''
 
 def add_to_sidebar(doc_name):
     """Update the sidebar with the new document."""
@@ -27,18 +31,14 @@ def add_to_sidebar(doc_name):
 def load_document(file=None, url=None):
     """Load a document from a file or URL."""
     if file is not None:
-        # Save the uploaded file to a temporary location
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
             temp_file.write(file.read())
             temp_file_path = temp_file.name
-        
-        # Load a PDF document from the temporary file
         loader = PyPDFLoader(temp_file_path)
         documents = loader.load()
         add_to_sidebar(file.name)
         return documents
     elif url is not None:
-        # Load a document from a website
         loader = WebBaseLoader(url)
         documents = loader.load()
         add_to_sidebar(url)
@@ -46,16 +46,12 @@ def load_document(file=None, url=None):
 
 def generate_response(documents, openai_api_key, query_text):
     """Generate a response from the loaded documents."""
-    # Split documents into chunks
     text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
     texts = text_splitter.split_documents(documents)
-    # Select embeddings
     embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
-    # Create a vectorstore from documents and use ChromaDB for persistence
     db = Chroma.from_documents(texts, embeddings, persist_directory="chromadb_storage")
-    db.persist()  # Persist the embeddings to disk
+    db.persist()
     retriever = db.as_retriever()
-    # Create QA chain
     qa = RetrievalQA.from_chain_type(
         llm=OpenAI(openai_api_key=openai_api_key),
         chain_type='stuff',
@@ -63,16 +59,43 @@ def generate_response(documents, openai_api_key, query_text):
     )
     return qa.run(query_text)
 
-# Sidebar for loaded documents
+# Sidebar
 with st.sidebar:
-    st.title("Loaded Documents")
-    if st.session_state['document_list']:
-        for doc in st.session_state['document_list']:
-            st.write(f"- {doc}")
-    else:
-        st.write("No documents loaded.")
+    # Logo
+    st.image("https://lwfiles.mycourse.app/65a58160c1646a4dce257fac-public/a82c64f84b9bb42db4e72d0d673a50d0.png", use_column_width=True)
 
-# Page title
+    # API Key Input
+    st.session_state['api_key'] = st.text_input(
+        "OpenAI API Key",
+        type="password",
+        placeholder="Enter your OpenAI API key",
+    )
+
+    # Preloaded Documents
+    st.write("**Preloaded Documents**")
+    if st.button("Load Sample PDF"):
+        documents = load_document(url="https://example.com/sample.pdf")  # Replace with a real URL
+        st.session_state['document_list'].append("Sample PDF")
+    if st.button("Load Sample Website"):
+        documents = load_document(url="https://example.com")  # Replace with a real URL
+        st.session_state['document_list'].append("Sample Website")
+
+    # Query History
+    st.write("**Query History**")
+    for i, (query, response) in enumerate(st.session_state['query_history']):
+        st.write(f"{i + 1}. {query} → {response}")
+
+    # Export Queries
+    if st.button("Export Query History"):
+        history_text = "\n".join([f"{query} → {response}" for query, response in st.session_state['query_history']])
+        st.download_button(
+            label="Download History",
+            data=history_text,
+            file_name="query_history.txt",
+            mime="text/plain"
+        )
+
+# Main App
 st.title('🦜🔗 Enhanced Ask the Doc App')
 
 # File or URL upload
@@ -94,22 +117,8 @@ query_text = st.text_input(
 )
 
 # Form input and query
-result = []
-with st.form('query_form', clear_on_submit=True):
-    openai_api_key = st.text_input(
-        'OpenAI API Key',
-        type='password',
-        disabled=not (documents and query_text)
-    )
-    submitted = st.form_submit_button(
-        'Submit',
-        disabled=not (documents and query_text)
-    )
-    if submitted and openai_api_key.startswith('sk-'):
-        with st.spinner('Generating response...'):
-            response = generate_response(documents, openai_api_key, query_text)
-            result.append(response)
-            del openai_api_key
-
-if len(result):
-    st.info(response)
+if st.session_state['api_key'] and query_text and documents:
+    with st.spinner('Generating response...'):
+        response = generate_response(documents, st.session_state['api_key'], query_text)
+        st.session_state['query_history'].append((query_text, response))
+        st.write("**Response:**", response)
